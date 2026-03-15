@@ -25,7 +25,9 @@ This work builds upon the patented pre-semantic trajectory governance framework.
 
 ## What This Is
 
-A ~100 line middleware plugin that sits between **any** LLM agent and its tools. The guard checks whether a proposed tool call would lead to a forbidden state — and blocks it before execution.
+A lightweight middleware plugin that sits between an LLM agent and its tools, evaluating proposed actions before execution. The guard checks whether a proposed tool call would lead to a forbidden state — and blocks it before the tool fires.
+
+**Current v1 implements one-step transition safety. Multi-step reachability is the next extension.**
 
 ```
 LLM / Agent
@@ -58,14 +60,14 @@ The guard is model-independent. It governs GPT, Claude, Gemini, or any system th
 
 ### The Five Components
 
-|Component         |Class              |Morrison Equation                                     |
-|:----------------:|:-----------------:|:----------------------------------------------------:|
-|System state      |`SystemState`      |`x̂_t ∈ X`                                             |
-|Proposed action   |`ProposedAction`   |`u_t ∈ U`                                             |
-|Transition model  |`TransitionModel`  |`x_{t+1} = F(x_t, u_t)`                               |
-|Forbidden region  |`ForbiddenSet`     |`Ω` — policy compiled into state constraints          |
-|Reachability Guard|`ReachabilityGuard`|`ℛ(t) ∩ Ω = ∅`                                        |
-|Guarded agent     |`GuardedAgent`     |Universal tool wrapper — `tool_call → guard → execute`|
+|Component         |Class              |Morrison Equation                                              |
+|:----------------:|:-----------------:|:-------------------------------------------------------------:|
+|System state      |`SystemState`      |`x̂_t ∈ X`                                                      |
+|Proposed action   |`ProposedAction`   |`u_t ∈ U`                                                      |
+|Transition model  |`TransitionModel`  |`x_{t+1} = F(x_t, u_t)`                                        |
+|Forbidden region  |`ForbiddenSet`     |`Ω` — policy compiled into state constraints                   |
+|Reachability Guard|`ReachabilityGuard`|v1: `F(x_t, u_t) ∉ Ω` · Target: `Reach(F(x_t, u_t), k) ∩ Ω = ∅`|
+|Guarded agent     |`GuardedAgent`     |Universal tool wrapper — `tool_call → guard → execute`         |
 
 ### The Logic
 
@@ -82,11 +84,24 @@ class ReachabilityGuard:
         return {"decision": "APPROVE", "reason": "Reachable future safe"}
 ```
 
-Simulate the transition. Check if the next state enters Ω. If yes — block. If no — allow. Safety checked at the dynamics layer, before execution.
+Simulate the transition. Check if the next state enters Ω. If yes — block. If no — allow. Safety is enforced at the action-transition layer, before tool execution.
 
 -----
 
 ## Example Output
+
+**State the guard is inspecting:**
+
+```python
+current_state = {
+    "task": "summarize confidential document",
+    "document_type": "confidential",
+    "internet_permission": False,
+    "data_leak_risk": 0.0
+}
+```
+
+**Guard decisions:**
 
 ```
 Test 1: Internet search on confidential doc (no permission)
