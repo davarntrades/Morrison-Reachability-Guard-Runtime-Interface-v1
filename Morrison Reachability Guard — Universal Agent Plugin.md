@@ -11,7 +11,7 @@
 
 -----
 
-*ℛ(t) ∩ Ω = ∅ — enforced at the tool boundary.*
+*F(x_t, u_t) ∉ Ω — enforced at the tool boundary.*
 
 *— Davarn Morrison, 2026*
 
@@ -25,9 +25,9 @@ This work builds upon the patented pre-semantic trajectory governance framework.
 
 ## What This Is
 
-A lightweight middleware plugin that sits between an LLM agent and its tools, evaluating proposed actions before execution. The guard checks whether a proposed tool call would lead to a forbidden state — and blocks it before the tool fires.
+A lightweight middleware plugin that sits between an LLM agent and its tools, evaluating proposed actions before execution. The guard checks whether a proposed tool call would transition the system into a forbidden state — and blocks it before the tool fires.
 
-**Current v1 implements one-step transition safety. Multi-step reachability is the next extension.**
+This v1 implementation enforces one-step transition safety (F(x_t, u_t) ∉ Ω), providing a minimal executable approximation of the full reachability invariant.
 
 ```
 LLM / Agent
@@ -84,7 +84,11 @@ class ReachabilityGuard:
         return {"decision": "APPROVE", "reason": "Reachable future safe"}
 ```
 
-Simulate the transition. Check if the next state enters Ω. If yes — block. If no — allow. Safety is enforced at the action-transition layer, before tool execution.
+Simulate the transition. Evaluate whether the proposed action transitions the system into a forbidden state. If yes — block. If no — allow. Safety is enforced at the action-transition layer, before tool execution.
+
+In extended implementations, the transition model can operate over higher-dimensional representations (e.g. latent embeddings), allowing reachability constraints to be applied beyond explicit symbolic states.
+
+This version does not yet account for delayed violations arising from multi-step trajectories.
 
 -----
 
@@ -116,7 +120,7 @@ Test 3: Internet search WITH permission
 
 Test 1: LLM wants to search the internet while handling a confidential document without internet permission. **Blocked.** Test 2: LLM wants to write a file. Permission granted. **Executed.** Test 3: LLM wants to search the internet on a public topic with permission. **Executed.**
 
-The guard doesn’t block everything. It blocks exactly what the forbidden set defines. Configurable. Domain-specific. Geometric.
+The guard blocks only those actions that transition the system into Ω, leaving all other behaviour unchanged. Configurable. Domain-specific. Geometric.
 
 -----
 
@@ -229,6 +233,8 @@ Three upgrades from v1:
 |Policy compiler        |Hand-coded rules|Law / enterprise policy → Ω automatically|Scales governance without manual rule writing            |
 |Action projection      |REJECT only     |`u_safe = argmin ‖u − u_t‖`              |System proposes nearest safe alternative, not just blocks|
 
+Preliminary V2/V3 prototypes for multi-step reachability have been defined and are pending empirical validation.
+
 -----
 
 ## The Three Layers
@@ -296,13 +302,13 @@ Available at: https://github.com/davarn/morrison-framework
 ```
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                                                                      ║
-║   Theory → Architecture → Software                                   ║
+║   F(x_t, u_t) ∉ Ω                                                   ║
 ║                                                                      ║
-║   ℛ(t) ∩ Ω = ∅                                                      ║
-║                                                                      ║
-║   Enforced at the tool boundary.                                     ║
+║   One-step safety enforced at runtime.                               ║
 ║   Model-independent. Domain-configurable.                            ║
 ║   ~100 lines. Zero dependencies.                                     ║
+║                                                                      ║
+║   Multi-step reachability is the next validation stage.              ║
 ║                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 ```
