@@ -11,7 +11,7 @@
 
 -----
 
-*Your safety invariant ℛ(t) ∩ Ω = ∅ is now literally enforced at runtime.*
+*Safety is not what you filter from the output. Safety is what you exclude from the reachable set.*
 
 *— Davarn Morrison, 2026*
 
@@ -25,9 +25,9 @@ This work builds upon the patented pre-semantic trajectory governance framework.
 
 ## What This Is
 
-A practical implementation of the Morrison Reachability Guard for LLM agent systems. Instead of a toy 2D state space, this version operates on real agent runtime states — tasks, tools, permissions, memory, environment, and risk markers. The guard sits between an LLM planner and tool execution, checking whether proposed actions lead to forbidden states before they happen.
+A practical instantiation of the Morrison Reachability Guard for LLM agent systems. Instead of a toy 2D state space, this version operates on real agent runtime states — tasks, tools, permissions, memory, environment, and risk markers. The guard sits between an LLM planner and tool execution, checking whether proposed actions lead to forbidden states before they happen.
 
-This is the Morrison Framework applied to real AI governance.
+This implementation enforces the invariant at the one-step transition level, providing a minimal, executable instantiation of the framework. Full multi-step reachability remains the next stage of validation.
 
 -----
 
@@ -43,7 +43,7 @@ ProposedAction (tool call, API request, response class)
 │                               │
 │   TransitionModel: F(x_t,u_t) │
 │   ForbiddenSet: Ω             │
-│   Check: ℛ ∩ Ω = ∅ ?         │
+│   Check: F(x_t,u_t) ∉ Ω      │
 │                               │
 └──────────┬────────────────────┘
            │
@@ -122,7 +122,7 @@ action = ProposedAction(
 )
 ```
 
-The LLM wants to search the internet. The guard will check whether this leads to a forbidden state.
+The LLM wants to search the internet. The guard will check whether this transition enters a forbidden state.
 
 -----
 
@@ -157,6 +157,8 @@ class TransitionModel:
 ```
 
 This is where the agent’s workflow graph lives. Each tool call has consequences that change the state. The transition model makes those consequences explicit and evaluable *before execution*.
+
+**Extension path.** In more advanced implementations, the transition model can operate over higher-dimensional representations, including latent embeddings or vector states, enabling reachability constraints to be applied directly within model-internal spaces.
 
 -----
 
@@ -196,7 +198,9 @@ This is where **institutions configure the guard**. Different rules for differen
 
 -----
 
-### 5. The Reachability Guard — Enforcing ℛ ∩ Ω = ∅
+### 5. The Reachability Guard — Enforcing the Safety Invariant
+
+This implementation enforces a local (one-step) approximation of the invariant, ensuring that immediate transitions do not enter Ω.
 
 ```python
 class ReachabilityGuard:
@@ -222,6 +226,8 @@ class ReachabilityGuard:
 ```
 
 The guard simulates the transition *before it happens*. If the next state enters Ω, the action is rejected. If not, the action is approved. Safety is checked at the dynamics layer, not the output layer.
+
+This version does not yet account for delayed violations arising from multi-step trajectories, which is the focus of ongoing work.
 
 -----
 
@@ -263,7 +269,7 @@ print(result)
 
 The LLM wanted to search the internet while handling a confidential document without internet permission. The guard checked the transition. The next state enters Ω. The action is blocked *before execution*.
 
-`ℛ(t) ∩ Ω = ∅` — enforced at runtime.
+`F(x_t, u_t) ∉ Ω` — enforced at runtime at the transition boundary.
 
 -----
 
@@ -275,20 +281,16 @@ The LLM wanted to search the internet while handling a confidential document wit
 |`u_t ∈ U`              |`ProposedAction`              |What the LLM planner wants to do               |
 |`x_{t+1} = F(x_t, u_t)`|`TransitionModel.simulate()`  |Computes next state from current state + action|
 |`Ω`                    |`ForbiddenSet.contains()`     |Policy compiled into state-space constraints   |
-|`ℛ(t) ∩ Ω = ∅`         |`ReachabilityGuard.evaluate()`|Checks safety invariant before execution       |
+|`F(x_t, u_t) ∉ Ω`      |`ReachabilityGuard.evaluate()`|Checks one-step safety before execution        |
 |APPROVE / REJECT       |Guard output                  |The governance decision                        |
 
 -----
 
-## The Next Upgrade: Multi-Step Reachability
+## The Next Stage: Multi-Step Reachability
 
-The current implementation checks one step:
+The current implementation enforces one-step transition safety. Multi-step reachability is already partially implemented in V2/V3 prototypes and represents the next validation stage.
 
-```
-F(x̂_t, u_t) ∉ Ω
-```
-
-The full power of the framework appears with multi-step checking:
+The framework extends naturally to multi-step reachability:
 
 ```
 Reach(F(x̂_t, u_t), k) ∩ Ω = ∅
@@ -302,7 +304,7 @@ This checks not just whether the immediate next state is safe, but whether any s
 |k-step      |`Reach(F(x̂_t, u_t), k) ∩ Ω = ∅`|Near-future violations|
 |Full-horizon|`Reach⁺(F(x̂_t, u_t)) ∩ Ω = ∅`  |All future violations |
 
-This is the difference between a filter and a governance architecture. Filters check the output. The guard checks the trajectory.
+This is the difference between a filter and a governance architecture. Filters evaluate outputs. The guard constrains trajectories.
 
 -----
 
@@ -316,6 +318,8 @@ This is the difference between a filter and a governance architecture. Filters c
 |Jailbreaks bypass it                 |Jailbreaks cannot reach Ω — it is geometrically excluded|
 |Model-specific rules                 |Model-independent architecture                          |
 |Reactive                             |Pre-emptive                                             |
+
+This targets failure modes such as indirect data leakage, multi-step prompt injection, and tool misuse that cannot be reliably prevented through output filtering alone.
 
 -----
 
@@ -365,7 +369,8 @@ Available at: https://github.com/davarn/morrison-framework
 ║   Safety is not what you filter from the output.                     ║
 ║   Safety is what you exclude from the reachable set.                 ║
 ║                                                                      ║
-║   This code enforces the invariant at runtime.                       ║
+║   This code enforces the one-step invariant at runtime.              ║
+║   Multi-step reachability is the next validation stage.              ║
 ║                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 ```
